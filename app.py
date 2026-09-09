@@ -1,19 +1,35 @@
 import os
+import sys
 import pickle
 import numpy as np
 from flask import Flask, render_template_string, request
 
+# -----------------------------------------------------------------------------
+# NumPy 2.x to 1.x Unpickling Compatibility Layer for Vercel Serverless
+# -----------------------------------------------------------------------------
+try:
+    import numpy._core.multiarray
+except ImportError:
+    import numpy.core.multiarray
+    sys.modules['numpy._core.multiarray'] = numpy.core.multiarray
+
 app = Flask(__name__)
 
-# Load Model
+# -----------------------------------------------------------------------------
+# Model Loading
+# -----------------------------------------------------------------------------
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'linear.pkl')
+model = None
+
 try:
     with open(MODEL_PATH, 'rb') as f:
         model = pickle.load(f)
 except Exception as e:
-    model = None
+    print(f"Error loading model: {e}")
 
-# Single-page HTML Template with inline CSS & Animations
+# -----------------------------------------------------------------------------
+# UI Layout Template
+# -----------------------------------------------------------------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -33,8 +49,8 @@ HTML_TEMPLATE = """
         body {
             background: #0f172a;
             background-image: 
-                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.2) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.2) 0px, transparent 50%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -46,16 +62,16 @@ HTML_TEMPLATE = """
         .container {
             width: 100%;
             max-width: 720px;
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.75);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 24px;
             padding: 2.5rem;
             box-shadow: 
-                0 20px 25px -5px rgba(0, 0, 0, 0.5),
-                0 8px 10px -6px rgba(0, 0, 0, 0.5),
-                0 0 40px rgba(99, 102, 241, 0.1);
+                0 20px 25px -5px rgba(0, 0, 0, 0.6),
+                0 8px 10px -6px rgba(0, 0, 0, 0.4),
+                0 0 50px rgba(99, 102, 241, 0.15);
         }
 
         .header {
@@ -110,7 +126,7 @@ HTML_TEMPLATE = """
             font-size: 0.95rem;
             outline: none;
             transition: all 0.25s ease;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
         select option {
@@ -140,14 +156,14 @@ HTML_TEMPLATE = """
             transition: all 0.3s ease;
             box-shadow: 
                 0 4px 14px rgba(99, 102, 241, 0.4),
-                0 0 20px rgba(168, 85, 247, 0.2);
+                0 0 20px rgba(168, 85, 247, 0.25);
         }
 
         .btn-submit:hover {
             transform: translateY(-2px);
             box-shadow: 
                 0 6px 20px rgba(99, 102, 241, 0.6),
-                0 0 30px rgba(168, 85, 247, 0.4);
+                0 0 30px rgba(168, 85, 247, 0.45);
         }
 
         .btn-submit:active {
@@ -157,11 +173,13 @@ HTML_TEMPLATE = """
         .result-box {
             margin-top: 2rem;
             padding: 1.5rem;
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
-            border: 1px solid rgba(168, 85, 247, 0.3);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.12) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.35);
             border-radius: 16px;
             text-align: center;
-            box-shadow: 0 10px 25px -5px rgba(168, 85, 247, 0.2);
+            box-shadow: 
+                0 10px 25px -5px rgba(168, 85, 247, 0.25),
+                inset 0 1px 1px rgba(255, 255, 255, 0.1);
             animation: fadeIn 0.4s ease-out;
         }
 
@@ -210,7 +228,7 @@ HTML_TEMPLATE = """
     <div class="container">
         <div class="header">
             <h1>Property Valuation</h1>
-            <p>Enter physical attributes below to calculate estimated value</p>
+            <p>Enter physical attributes to calculate estimated valuation</p>
         </div>
 
         <form method="POST" action="/" class="grid-form">
@@ -244,7 +262,6 @@ HTML_TEMPLATE = """
                 <input type="number" step="1" id="Garage_Size" name="Garage_Size" value="{{ inputs.get('Garage_Size', '2') }}" required>
             </div>
 
-            <!-- Categorical Input mapped as requested -->
             <div class="form-group full-width">
                 <label for="Neighborhood_Quality">Neighborhood Quality Category</label>
                 <select id="Neighborhood_Quality" name="Neighborhood_Quality" required>
@@ -275,6 +292,9 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# -----------------------------------------------------------------------------
+# Routes
+# -----------------------------------------------------------------------------
 @app.route('/', methods=['GET', 'POST'])
 def home():
     prediction = None
@@ -287,8 +307,9 @@ def home():
             error = "Model file 'linear.pkl' failed to load properly."
         else:
             try:
-                # Extract inputs matching the exact 7 trained feature order:
-                # ['Square_Footage', 'Num_Bedrooms', 'Num_Bathrooms', 'Year_Built', 'Lot_Size', 'Garage_Size', 'Neighborhood_Quality']
+                # Features map to original dataset order[cite: 3]:
+                # 1. Square_Footage, 2. Num_Bedrooms, 3. Num_Bathrooms
+                # 4. Year_Built, 5. Lot_Size, 6. Garage_Size, 7. Neighborhood_Quality
                 features = [
                     float(request.form.get('Square_Footage', 0)),
                     float(request.form.get('Num_Bedrooms', 0)),
@@ -299,7 +320,6 @@ def home():
                     float(request.form.get('Neighborhood_Quality', 1))
                 ]
                 
-                # Make prediction
                 pred_val = model.predict(np.array([features]))[0]
                 prediction = float(pred_val)
             except Exception as e:
@@ -307,5 +327,15 @@ def home():
 
     return render_template_string(HTML_TEMPLATE, prediction=prediction, error=error, inputs=inputs)
 
+# Required entry point for Vercel WSGI Handler
+app = app
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+  
+
+
+
+
+
+   
