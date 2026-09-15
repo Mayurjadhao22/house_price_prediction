@@ -13,7 +13,7 @@ st.set_page_config(
 
 # Resolve directory paths dynamically
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL_PATH = os.path.join(BASE_DIR, "model.pkl")
+DEFAULT_MODEL_PATH = os.path.join(BASE_DIR, "linear.pkl")
 
 
 @st.cache_resource
