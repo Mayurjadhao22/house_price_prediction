@@ -1,97 +1,58 @@
-import os
-import pickle
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import pickle
 
-# Set page configuration
-st.set_page_config(
-    page_title="House Price Predictor",
-    page_icon="🏠",
-    layout="centered",
-)
+st.set_page_config(page_title="House Price Prediction Studio", layout="centered")
 
-# Resolve directory paths dynamically
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL_PATH = os.path.join(BASE_DIR, "linear.pkl")
+st.title("🏡 House Price Prediction Studio")
+st.write("Enter the property details below to estimate the house value.")
 
-
+# Load the Linear Regression model
 @st.cache_resource
-def load_model_from_file(file_path):
-    """Load trained model from local path."""
-    with open(file_path, "rb") as f:
-        return pickle.load(f)
+def load_model():
+    with open("model (2).pkl", "rb") as file:
+        model = pickle.load(file)
+    return model
 
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Error loading model file: {e}")
+    st.stop()
 
-@st.cache_resource
-def load_model_from_bytes(uploaded_file):
-    """Load model uploaded via Streamlit interface."""
-    return pickle.load(uploaded_file)
-
-
-def main():
-    st.title("🏠 House Price Prediction App")
-    st.write("Enter the property specifications below to estimate the market price.")
-
-    model = None
-
-    # Load local model.pkl or prompt for upload
-    if os.path.exists(DEFAULT_MODEL_PATH):
-        model = load_model_from_file(DEFAULT_MODEL_PATH)
-    else:
-        st.warning(f"`model.pkl` was not found at `{DEFAULT_MODEL_PATH}`.")
-        uploaded_model = st.file_uploader(
-            "Please upload your trained model file (`model.pkl`):",
-            type=["pkl", "pickle"],
-        )
-        if uploaded_model is not None:
-            model = load_model_from_bytes(uploaded_model)
-            st.success("Model loaded successfully!")
-        else:
-            st.info("Upload a valid model file above to continue.")
-            st.stop()
-
-    st.subheader("Property Features")
-
+# Input Form matching the exact feature names seen at fit time
+with st.form("house_price_form"):
+    st.subheader("Property Characteristics")
+    
     col1, col2 = st.columns(2)
-
+    
     with col1:
-        sqft = st.number_input("Square Footage (sq ft)", min_value=100, max_value=20000, value=1500, step=50)
-        bedrooms = st.number_input("Bedrooms", min_value=1, max_value=10, value=3, step=1)
-        bathrooms = st.number_input("Bathrooms", min_value=1.0, max_value=10.0, value=2.0, step=0.5)
+        square_footage = st.number_input("Square Footage (sq ft)", min_value=100, max_value=20000, value=2000, step=50)
+        num_bedrooms = st.number_input("Number of Bedrooms", min_value=1, max_value=10, value=3, step=1)
+        num_bathrooms = st.number_input("Number of Bathrooms", min_value=1.0, max_value=10.0, value=2.0, step=0.5)
+        year_built = st.number_input("Year Built", min_value=1800, max_value=2026, value=2010, step=1)
 
     with col2:
-        age = st.number_input("Property Age (Years)", min_value=0, max_value=150, value=10, step=1)
-        location_score = st.slider("Location Rating (1-10)", min_value=1, max_value=10, value=7)
-        garage_spaces = st.number_input("Garage Spaces", min_value=0, max_value=5, value=1, step=1)
+        lot_size = st.number_input("Lot Size (sq ft)", min_value=500, max_value=100000, value=5000, step=100)
+        garage_size = st.number_input("Garage Size (Car Capacity)", min_value=0, max_value=5, value=2, step=1)
+        neighborhood_quality = st.slider("Neighborhood Quality (1-10)", min_value=1, max_value=10, value=7, step=1)
 
-    # Prepare DataFrame matching typical regression model inputs
-    input_data = pd.DataFrame(
-        [
-            {
-                "Square_Footage": sqft,
-                "Bedrooms": bedrooms,
-                "Bathrooms": bathrooms,
-                "Property_Age": age,
-                "Location_Score": location_score,
-                "Garage_Spaces": garage_spaces,
-            }
-        ]
-    )
+    submit_button = st.form_submit_button(label="Predict House Price")
 
-    st.markdown("---")
-
-    if st.button("Predict Price", type="primary"):
-        try:
-            # Generate numerical prediction
-            predicted_price = model.predict(input_data)[0]
-            
-            st.subheader("Estimated Property Value")
-            st.success(f"💰 **${predicted_price:,.2f}**")
-
-        except Exception as e:
-            st.error(f"Error executing prediction: {e}")
-
-
-if __name__ == "__main__":
-    main()
+if submit_button:
+    # Pass features with the exact column names required by the trained model
+    input_df = pd.DataFrame([{
+        "Square_Footage": square_footage,
+        "Num_Bedrooms": num_bedrooms,
+        "Num_Bathrooms": num_bathrooms,
+        "Year_Built": year_built,
+        "Lot_Size": lot_size,
+        "Garage_Size": garage_size,
+        "Neighborhood_Quality": neighborhood_quality
+    }])
+    
+    try:
+        prediction = model.predict(input_df)[0]
+        st.success(f"Estimated Price: **${prediction:,.2f}**")
+    except Exception as e:
+        st.error(f"Error executing prediction: {e}")
