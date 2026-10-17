@@ -10,7 +10,7 @@ st.write("Enter the property details below to estimate the house value.")
 # Load the Linear Regression model
 @st.cache_resource
 def load_model():
-    with open("model (2).pkl", "rb") as file:
+    with open("linear.pkl", "rb") as file:
         model = pickle.load(file)
     return model
 
